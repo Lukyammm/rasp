@@ -51,7 +51,7 @@ cobre:
 | Sessões logadas | `backend\sessao_*_dir\` e `backend\sessao_*.json` (X, TikTok, Instagram, YouTube, Facebook) | ele loga de novo em cada rede; **nunca abrir, copiar ou listar o conteúdo** |
 | Base de coletas | `backend\datapulse.db` (com `-wal` e `-shm`) e `backend\scraper.db` | insubstituível; há `datapulse.db.bak` e `.bak_lukyam` de 12/09/2026 |
 | Arquivos baixados | `backend\downloads\`, `backend\media_store\` | refaz coletando de novo, se o post existir |
-| Código | `backend\`, `frontend\` | sem git: a pasta não é repositório; há `_backup_antes_melhorias_2026-09-12\` e `_arquivo_legado\` |
+| Código | `backend\`, `frontend\` | GitHub público github.com/Lukyammm/rasp desde 15/10/2026 (esta pasta é o repositório); há também `_backup_antes_melhorias_2026-09-12\` e `_arquivo_legado\` |
 
 - **Insubstituível (nunca apagar, nunca sobrescrever):** sessões, as duas bases, os backups e o legado:
   `backend/sessao_facebook_dir/`, `backend/sessao_instagram_dir/`, `backend/sessao_tiktok_dir/`, `backend/sessao_x_dir/`,
@@ -59,7 +59,9 @@ cobre:
   `backend/sessao_youtube.json`, `backend/datapulse.db`, `backend/scraper.db`, `backend/datapulse.db.bak`,
   `backend/datapulse.db.bak_lukyam`, `_backup_antes_melhorias_2026-09-12/`, `_arquivo_legado/`.
 - **Derivado:** `backend\logs\`, Excel e PDF exportados.
-- A pasta mora no `scratch` do Antigravity. Nada aqui tem cópia no GitHub. Antes de mexer em código:
+- A pasta mora no `scratch` do Antigravity. Só o código sobe para o GitHub: o `.gitignore` deixa de fora sessões,
+  bases (`*.db`, backups), `RASP Planilhas\`, `media_store\`, `downloads\`, `logs\`, `venv\` e `screenshots_studio\`.
+  Antes de pôr arquivo novo no git, conferir que ele não traz sessão, base ou planilha. Antes de mexer em código:
   `python "C:\Users\_EBMQUINTTO_\Desktop\Eu\Desenvolvimento_e_Codigos\Template_Universal_IA\scripts\protecao.py" fotografar "<esta pasta>"`.
 
 ## Regras deste projeto
@@ -75,7 +77,7 @@ cobre:
 
 ## Onde parou
 
-Atualizado em 2026-10-14. Esta seção tem no máximo 40 linhas: o que fechou vai para `HISTORICO_DESENVOLVIMENTO.md`.
+Atualizado em 2026-10-15. Esta seção tem no máximo 40 linhas: o que fechou vai para `HISTORICO_DESENVOLVIMENTO.md`.
 
 - **Calendário (14/10/2026):** o estilo do flatpickr no `frontend/index.html` foi refeito (alinhamento, tamanhos,
   cobalto, sem vidro). Vale aqui e no EBM Hub, que lê esta página. Detalhes no `HISTORICO.md`.
@@ -105,8 +107,12 @@ Atualizado em 2026-10-14. Esta seção tem no máximo 40 linhas: o que fechou va
   Controles"); código do backend com data de 09 e 10/10/2026.
 - **Em curso fora desta conversa:** desconhecido; o Antigravity também trabalha nesta pasta.
 - **Desconhecido:** se os testes passam hoje (não rodados nesta atualização).
-- **Esperando o Lukyam decidir:** se o RASP ganha repositório próprio (hoje não tem cópia fora deste PC, fora o
-  backup do Drive, se houver).
+- **GitHub (15/10/2026, pedido dele: "sobe a porra do rasp completo pro github"):** repositório público
+  github.com/Lukyammm/rasp, commit `7964bee`, 194 arquivos (14,3 MB), conferidos no GitHub: nenhuma sessão, base,
+  planilha ou chave. O `instalar.bat` do EBM Hub baixa este repositório para uma pasta `RASP` ao lado do Hub quando
+  não acha o RASP, cria `backend\venv` e instala `backend\requirements.txt`; o `atualizar.bat` do Hub faz `git pull
+  --ff-only` aqui (ou baixa o ZIP por cima, sem apagar nada) e só reinstala os pacotes se o `requirements.txt` mudou.
+  Para outros computadores receberem uma mudança daqui, ela precisa de commit e push.
 
 ## Como refazer do zero
 
