@@ -1,0 +1,44 @@
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans';background:#FAF8F5;color:#111827;display:flex;width:1400px}
+.col{width:700px;padding:24px;box-sizing:border-box;border-right:1px solid #E4DFD6}
+.lab{font:500 12px 'JetBrains Mono';opacity:.6;margin-bottom:14px}
+.row{display:flex;gap:20px;align-items:flex-end;margin:16px 0}
+.lock{display:flex;align-items:center;gap:16px;margin-top:8px}.lock b{font-size:56px;font-weight:800;letter-spacing:-.025em}
+.dk{background:#090A0F;color:#ECEEF2;padding:16px;margin-top:14px;border-radius:6px}
+svg{display:block}
+</style></head><body><script>
+// Pilha isométrica (30°) com a ponta da lâmina de cima dobrada. Cores chapadas, sem gradiente e sem sombra.
+const W=170,H=98,T=34,STEP=56,CX=256,Y0=86;
+const P=a=>a.map(p=>p.join(' ')).join(' L');
+function slab(y,c){
+  const t=[CX,y],r=[CX+W,y+H],b=[CX,y+2*H],l=[CX-W,y+H];
+  const d=p=>[p[0],p[1]+T];
+  return `<path d="M${P([l,b,d(b),d(l)])}Z" fill="${c.left}"/>`+
+         `<path d="M${P([b,r,d(r),d(b)])}Z" fill="${c.right}"/>`+
+         `<path d="M${P([t,r,b,l])}Z" fill="${c.top}"/>`;
+}
+function stack(c,k){
+  // k = fração da aresta onde fica a dobra (maior = dobra maior)
+  let s=slab(Y0+2*STEP,c)+slab(Y0+STEP,c)+slab(Y0,c);
+  const t=[CX,Y0],r=[CX+W,Y0+H],b=[CX,Y0+2*H];
+  const lerp=(a,z,f)=>[a[0]+(z[0]-a[0])*f,a[1]+(z[1]-a[1])*f];
+  const p1=lerp(t,r,k),p2=lerp(b,r,k),fx=p1[0];
+  const rr=[2*fx-r[0],r[1]];               // ponta refletida sobre a linha da dobra
+  s+=`<path d="M${P([p1,r,p2])}Z" fill="${c.under}"/>`;   // o que a dobra descobre
+  s+=`<path d="M${P([p1,rr,p2])}Z" fill="${c.flap}"/>`;   // verso da lâmina
+  return s;
+}
+const DARK={top:'#1D4ED8',left:'#1739A8',right:'#122E87',under:'#3B6FF0',flap:'#C2410C'};
+const icon=(bg,k)=>`<svg viewBox="0 0 512 512"><rect width="512" height="512" rx="116" fill="${bg}"/><g transform="translate(256 256) scale(.78) translate(-256 -257)">${stack(DARK,k)}</g></svg>`;
+const bare=k=>`<svg viewBox="0 0 512 512">${stack(DARK,k)}</svg>`;
+const N={0.45:'A  dobra grande',0.62:'B  dobra pequena (mais perto do mockup)'};
+for(const k of [0.45,0.62]){const d=document.createElement('div');d.className='col';
+const sz=[200,64,32,16].map(s=>`<div style="width:${s}px;height:${s}px">${icon('#090A0F',k)}</div>`).join('');
+const szl=[64,32,16].map(s=>`<div style="width:${s}px;height:${s}px">${icon('#FAF8F5',k)}</div>`).join('');
+d.innerHTML=`<div class="lab">${N[k]}</div><div class="row">${sz}</div><div class="row">${szl}</div>
+<div class="lock"><div style="width:84px;height:84px">${bare(k)}</div><b>RASP</b></div>
+<div class="dk"><div class="lock"><div style="width:84px;height:84px">${bare(k)}</div><b>RASP</b></div></div>`;
+document.body.appendChild(d);}
+</script></body></html>

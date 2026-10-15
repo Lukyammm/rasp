@@ -1,0 +1,34 @@
+# Ambiente e cache
+backend/venv/
+__pycache__/
+*.pyc
+
+# Sessões das redes (contêm cookies de login — nunca versionar)
+backend/sessao_*.json
+backend/sessao_*_dir/
+*.tmp
+
+# Dados locais
+backend/datapulse.db
+backend/datapulse.db-*
+backend/downloads/
+backend/logs/
+
+# Backups e arquivo legado
+_backup_*/
+_arquivo_legado/
+
+# Bases e backups da base (coletas reais)
+*.db
+*.db-*
+*.db.bak*
+backend/media_store/
+
+# Planilhas exportadas das coletas (dados de clientes e de pessoas)
+RASP Planilhas/
+
+# Fotos de teste da tela
+screenshots_studio/
+
+# Estado local do Claude Code
+.claude/estado/

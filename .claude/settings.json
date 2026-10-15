@@ -1,0 +1,54 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "\"$(command -v python || command -v python3)\" \"${CLAUDE_PROJECT_DIR:-.}/_kit/scripts/barra.py\""
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(command -v python || command -v python3)\" \"$CLAUDE_PROJECT_DIR/_kit/scripts/mudancas.py\" --gancho",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(command -v python || command -v python3)\" \"$CLAUDE_PROJECT_DIR/_kit/scripts/guarda.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p \"$CLAUDE_PROJECT_DIR/.claude/estado\" && touch \"$CLAUDE_PROJECT_DIR/.claude/estado/mexida\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(command -v python || command -v python3)\" \"$CLAUDE_PROJECT_DIR/_kit/scripts/mudancas.py\" --gancho",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

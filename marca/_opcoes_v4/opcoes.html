@@ -1,0 +1,27 @@
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans';background:#2a2a2a}
+.row{display:flex}
+.p{width:700px;padding:26px 30px;box-sizing:border-box}
+.d{background:#090A0F;color:#ECEEF2}.l{background:#FAF8F5;color:#111827}
+.lab{font:500 12px 'JetBrains Mono';letter-spacing:.08em;opacity:.6;margin-bottom:14px}
+.lock{display:flex;align-items:center;gap:22px}
+.lock b{font-size:64px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.sm{display:flex;gap:18px;align-items:center;margin-top:18px}
+svg{display:block}
+</style></head><body>
+<script>
+const C={d:{c:'#6A98F2',t:'#E57E4A',bg:'#090A0F'},l:{c:'#1D4ED8',t:'#C2410C',bg:'#FAF8F5'}};
+const S={
+A:(c,t)=>`<svg viewBox="0 0 400 400"><rect x="60" y="60" width="280" height="56" rx="6" fill="${c}"/><rect x="60" y="148" width="280" height="56" rx="6" fill="${c}"/><rect x="104" y="236" width="236" height="56" rx="6" fill="${t}"/><rect x="60" y="324" width="190" height="16" rx="6" fill="${c}" opacity="0"/></svg>`,
+B:(c,t)=>`<svg viewBox="0 0 400 400"><polygon points="60,60 316,60 60,316" fill="${c}"/><polygon points="340,84 340,340 84,340" fill="${t}"/></svg>`,
+C:(c,t)=>`<svg viewBox="0 0 400 400"><path fill="${c}" fill-rule="evenodd" d="M76 60 H224 A80 80 0 0 1 224 220 H140 V340 H76 Z M140 108 V172 H224 A32 32 0 0 0 224 108 Z"/><polygon fill="${t}" points="180,220 244,220 330,340 266,340"/></svg>`
+};
+const N={A:'A  linhas de dados, uma extraída',B:'B  quadrado raspado em diagonal',C:'C  R modular, perna em terracota'};
+for(const k of 'ABC'){const r=document.createElement('div');r.className='row';
+for(const m of ['d','l']){const {c,t}=C[m];r.innerHTML+=`<div class="p ${m}"><div class="lab">${N[k]} · ${m=='d'?'escuro':'claro'}</div>
+<div class="lock"><div style="width:120px;height:120px">${S[k](c,t)}</div><b>RASP</b></div>
+<div class="sm"><div style="width:48px;height:48px">${S[k](c,t)}</div><div style="width:32px;height:32px">${S[k](c,t)}</div><div style="width:16px;height:16px">${S[k](c,t)}</div></div></div>`}
+document.body.appendChild(r)}
+</script></body></html>

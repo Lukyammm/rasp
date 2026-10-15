@@ -1,0 +1,27 @@
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Plus Jakarta Sans';background:#FAF8F5;color:#111827;display:flex}
+.col{width:466px;padding:24px;box-sizing:border-box;border-right:1px solid #E4DFD6}
+.lab{font:500 12px 'JetBrains Mono';opacity:.6;margin-bottom:14px}
+.sm{display:flex;gap:16px;align-items:flex-end;margin:16px 0}
+.lock{display:flex;align-items:center;gap:16px;margin-top:8px}.lock b{font-size:52px;font-weight:800;letter-spacing:-.03em}
+.dk{background:#090A0F;color:#ECEEF2;padding:16px;margin-top:14px;border-radius:6px}
+svg{display:block}
+</style></head><body><script>
+const tear=(L,r,fill)=>`<path d="M${-r} 0 A${r} ${r} 0 0 1 ${r} 0 L0 ${L} Z" fill="${fill}"/>`;
+const G={
+1:(w,t)=>`<path d="M196 392 V196 M196 290 C196 226 232 196 292 196" fill="none" stroke="${w}" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/><path d="M300 164 A32 32 0 0 0 300 228 L420 196 Z" fill="${t}"/>`,
+2:(w,t)=>`<g transform="translate(256 256) rotate(-24)"><g transform="translate(-92 -150)">${tear(270,30,w)}</g><g transform="translate(0 -176)">${tear(340,30,w)}</g><g transform="translate(92 -150)">${tear(270,30,t)}</g></g>`,
+3:(w,t)=>`<path d="M172 396 V122 H270 Q360 122 360 192 Q360 262 270 262 H172" fill="none" stroke="${w}" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/><g transform="translate(262 262) rotate(-34)">${tear(190,27,t)}</g>`
+};
+const icon=(k,bg,w,t)=>`<svg viewBox="0 0 512 512"><rect width="512" height="512" rx="116" fill="${bg}"/>${G[k](w,t)}</svg>`;
+const bare=(k,c,t)=>`<svg viewBox="0 0 512 512">${G[k](c,t)}</svg>`;
+const N={1:'1  r de um traço, ponta raspada',2:'2  três arranhões inclinados',3:'3  R de traço contínuo, perna arranhada'};
+for(const k of [1,2,3]){const d=document.createElement('div');d.className='col';
+d.innerHTML=`<div class="lab">${N[k]}</div><div style="width:200px;height:200px">${icon(k,'#1D4ED8','#FAF8F5','#F2A27A')}</div>
+<div class="sm"><div style="width:64px;height:64px">${icon(k,'#1D4ED8','#FAF8F5','#F2A27A')}</div><div style="width:32px;height:32px">${icon(k,'#1D4ED8','#FAF8F5','#F2A27A')}</div><div style="width:16px;height:16px">${icon(k,'#1D4ED8','#FAF8F5','#F2A27A')}</div></div>
+<div class="lock"><div style="width:76px;height:76px">${bare(k,'#1D4ED8','#C2410C')}</div><b>RASP</b></div>
+<div class="dk"><div class="lock" style="margin:0"><div style="width:76px;height:76px">${bare(k,'#6A98F2','#E57E4A')}</div><b>RASP</b></div></div>`;
+document.body.appendChild(d)}
+</script></body></html>

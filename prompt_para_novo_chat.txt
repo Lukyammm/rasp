@@ -1,0 +1,67 @@
+# DOSSIÊ TÉCNICO & PROMPT MESTRE — PROJETO RASP (SocialScraper)
+
+Você é o Arquiteto e Desenvolvedor Sênior responsável por aprimorar o **RASP (SocialScraper)**, uma plataforma de Social Listening, Web Scraping e Business Intelligence desenvolvida para a agência de comunicação EBM Quintto.
+
+---
+
+## 1. LOCALIZAÇÃO E CAMINHOS OFICIAIS NO WINDOWS
+- **Diretório Raiz do Projeto:** C:\Users\_EBMQUINTTO_\.gemini\antigravity\scratch\SocialScraper
+- **Ambiente Virtual Python:** C:\Users\_EBMQUINTTO_\.gemini\antigravity\scratch\SocialScraper\backend\venv\Scripts\python.exe
+- **Portas (somente 127.0.0.1):**
+  - Backend API (FastAPI/Uvicorn): http://127.0.0.1:8000 (também serve a interface)
+  - Frontend Web UI (http.server): http://127.0.0.1:8080
+- **Logs do servidor:** backend\logs\rasp.log (o servidor roda oculto via VBS)
+- **Atalhos no Desktop do Usuário:** C:\Users\_EBMQUINTTO_\Desktop\ (RASP.lnk, Parar RASP.lnk, Pasta do RASP.lnk).
+- **Testes:** cd backend && venv\Scripts\python.exe -m unittest discover -s tests
+
+---
+
+## 2. ARQUITETURA DO SISTEMA (versão 2.0)
+- **Backend (/backend):**
+  - main.py: rotas REST (/api/scrape, /api/jobs, /api/dashboard, /api/history/runs, /api/export/excel, /api/report/pdf, /api/accounts, /api/brands, /api/schedules, /api/health) e WebSocket /ws/scrape/{client_id}.
+  - jobs.py: extrações como jobs em segundo plano (POST /api/scrape retorna job_id na hora), histórico de logs por job, cancelamento cooperativo (threading.Event), persistência dos posts e geração do Excel.
+  - analytics.py: dashboard (KPIs, redes, nuvem de palavras, feed normalizado) e histórico; corrige registros antigos desalinhados.
+  - scheduler_service.py: agendamentos APScheduler persistidos na tabela schedules e recarregados ao iniciar (crontab completo, pausar/retomar/executar agora).
+  - database.py: SQLAlchemy + SQLite WAL (datapulse.db) com tabelas scraped_posts, scrape_runs, brands e schedules; migrações aditivas idempotentes.
+  - excel_builder.py: planilha executiva com abas Dashboard Executivo, Share of Voice, Top Autores e Base de Posts (fórmulas vivas; proteção contra fórmulas injetadas e caracteres inválidos).
+  - pdf_generator.py: relatório PDF executivo (texto coletado é escapado).
+  - top_words.py: termos mais frequentes e stopwords da nuvem de palavras. O sistema NÃO faz análise de sentimento (decisão do usuário — não adicionar).
+  - utils.py: parser booleano seguro (sem eval), termos atômicos, métricas textuais, datas absolutas/relativas, normalização de autores.
+  - config.py: caminhos, redes, cookies de autenticação por rede, logging rotativo.
+  - scrapers/base_scraper.py: despachante central; scrapers/browser.py: estratégia de sessões, lock por rede e User-Agent coerente com o Chrome instalado; scrapers/common.py: ScrapeContext (limite, período, exclusões NOT, deduplicação, progresso, cancelamento, tempo máximo) e ResponseCollector (interceptação de rede).
+  - scrapers/x_scraper.py: GraphQL SearchTimeline/UserTweets. tiktok_scraper.py: api/search/item. instagram_scraper.py: GraphQL xdt_fbsearch__top_serp_graphql (sem abrir modais). youtube_scraper.py: ytInitialData + youtubei/v1. facebook_scraper.py: DOM atômico.
+  - scrapers/login_manager.py + login_worker.py: login interativo em processo separado e verificação de cookies válidos/não expirados.
+- **Frontend (/frontend):**
+  - index.html: dashboard em TailwindCSS (claro/escuro), versões de CDN fixadas.
+  - app.js: estado, editor booleano, logs ao vivo com barra de progresso e cancelamento, retomada após recarregar a página, filtros (rede, termo, busca), agendamentos e marcas. Todo conteúdo coletado passa por escapeHtml.
+
+---
+
+## 3. SOLUÇÕES CRÍTICAS JÁ CONSOLIDADAS (NÃO QUEBRAR)
+1. **Playwright + Uvicorn Concurrency:** o Playwright roda de forma síncrona dentro de asyncio.to_thread, isolado do loop assíncrono do FastAPI.
+2. **WebSocket Thread-Safe:** mensagens intermediárias do scraper usam asyncio.run_coroutine_threadsafe(manager.send_personal_message(...), loop).
+3. **Extração em Lote:** nunca usar loops page.locator().all() elemento a elemento; usar interceptação de JSON da rede ou um único page.evaluate por rodada (todas as redes seguem esse padrão).
+4. **Persistência de Cookies:** sessões sincronizadas entre sessao_{rede}_dir (perfil real) e sessao_{rede}.json (storage_state); o .json só é renovado se ainda contiver os cookies de login.
+
+---
+
+## 4. JÁ ENTREGUE NA VERSÃO 2.0 & ATUALIZAÇÕES RECENTES
+- Progresso "[INFO] {REDE}: {coletados}/{limite} posts coletados..." em todas as redes.
+- Abas Share of Voice e Top Autores no Excel.
+- Limites estritos de rolagem e tempo máximo por rede; cancelamento de extrações.
+- Detecção de sessão expirada/login obrigatório com aviso no console.
+- **Extração por Post Específico (Menu Superior `Post Específico`):**
+  - Permite colar URLs diretas de publicações (Instagram, TikTok, X, YouTube, Facebook) ou detectar automaticamente.
+  - Extrai métricas completas (autor, legenda, curtidas, comentários, views, shares, data e link) via reidratação/GraphQL/DOM sem depender de feeds de busca.
+  - Suporta até 50 links em lote e opção de extrair comentários automaticamente.
+- **Coleta de Comentários no Dashboard Aprimorada:**
+  - **Filtro por Rede Social:** Seleção de rede específica (Instagram, TikTok, YouTube, X, Facebook ou Todas as Redes) ou clique direto nos chips de estatísticas.
+  - **Patamares de Quantidade Adaptativos:** O seletor de quantidade de posts adapta-se dinamicamente ao volume de posts pendentes encontrados (ex.: se houver 30 posts, oferece 10, 20 ou Todas as 30; se houver 3.000 posts, oferece 50, 100, 250, 500, 1.000, 2.000 ou Todas as 3.000; além de campo personalizado).
+  - **Ordenação pelas Maiores:** Seleção prioriza os posts com mais comentários e maior engajamento (curtidas).
+
+## 5. PRÓXIMOS PASSOS SUGERIDOS
+1. Clusterização de pautas (agrupamento temático dos textos).
+2. Datas reais para o Facebook (quando omitidas pelo DOM mobile/desktop) e curtidas/comentários de Shorts do YouTube.
+3. Execução paralela controlada de redes dentro de uma mesma extração.
+
+Por favor, analise a base de código e apresente melhorias cirúrgicas, eficientes e sem redundâncias, preservando a estabilidade operacional do sistema.
