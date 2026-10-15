@@ -107,7 +107,7 @@ Atualizado em 2026-10-15. Esta seção tem no máximo 40 linhas: o que fechou va
   Controles"); código do backend com data de 09 e 10/10/2026.
 - **Em curso fora desta conversa:** desconhecido; o Antigravity também trabalha nesta pasta.
 - **Desconhecido:** se os testes passam hoje (não rodados nesta atualização).
-- **GitHub (15/10/2026, pedido dele: "sobe a porra do rasp completo pro github"):** repositório público
+- **GitHub (15/10/2026, ele pediu para subir o RASP completo para o GitHub):** repositório público
   github.com/Lukyammm/rasp, commit `7964bee`, 194 arquivos (14,3 MB), conferidos no GitHub: nenhuma sessão, base,
   planilha ou chave. O `instalar.bat` do EBM Hub baixa este repositório para uma pasta `RASP` ao lado do Hub quando
   não acha o RASP, cria `backend\venv` e instala `backend\requirements.txt`; o `atualizar.bat` do Hub faz `git pull
