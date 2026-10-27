@@ -85,7 +85,7 @@ ALLOWED_ORIGINS = [
 ]
 
 # Limites operacionais
-MAX_LIMIT_PER_NETWORK = 1000
+MAX_LIMIT_PER_NETWORK = 1_000_000  # sem teto prático (pedido do Lukyam, 27/10/2026: "eu nao quero limitacao")
 MAX_CONCURRENT_JOBS = 2
 JOB_LOG_HISTORY = 400
 

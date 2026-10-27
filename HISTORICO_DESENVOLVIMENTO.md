@@ -330,3 +330,34 @@ Este documento registra em detalhes as implementações, decisões de arquitetur
 
 
 - 12/10/2026, mais tarde: ícone sem fundo (pedido do Lukyam). `icone()` em `build_brand_assets.py` devolve só a placa a 98% da largura; .ico, favicon e `rasp_icone_1024.png` ficaram transparentes. Atalho passou para `rasp_icon_v5.ico`; `rasp_icon_v4.ico` apagado. `?v=8` no index.html.
+
+## 27/10/2026: perfil do Instagram com período rola até o início
+
+- **Problema medido:** extração de perfil com data de início e fim voltava 0 posts quando o fim não era hoje
+  (perfil de teste, 01 a 30/09/2026: 0 posts). Os posts mais novos que o fim eram descartados pelo filtro de datas e contavam
+  como rolagem parada; 3 rolagens assim encerravam a busca. Havia também o teto de 25 rolagens (cerca de 300 posts) e
+  o tempo máximo de 900 s, curtos para um ano de perfil ativo.
+- **Mudança** (`backend/scrapers/instagram_scraper.py`, só quando `search_type == "profile"` e há `start_date`): post
+  mais novo que o fim não conta como rolagem parada; a busca termina ao ver 4 posts não fixados anteriores ao início
+  (até 3 podem estar fixados no topo); teto de 400 rolagens; tempo máximo de pelo menos 2.400 s. Busca por palavra e
+  perfil sem data seguem como antes. A API não mudou.
+- **Conferido:** 76 testes do backend e `test_integrity.py` passando; o mesmo pedido trouxe 31 posts, de 01/09 14:03
+  a 30/09 15:15, todos do perfil pedido, com o log "período coberto". Foto antes da mudança:
+  `C:\Users\_EBMQUINTTO_\SocialScraper_cofre\20261027_125229`.
+- Commit e push em 27/10/2026, junto com as duas mudanças abaixo; o EBM Hub recebe pelo `atualizar.bat`.
+
+- 27/10/2026, mais tarde: **sem teto** (pedido do Lukyam: "tire esse teto, eu nao quero limitacao, sério").
+  `config.py`: `MAX_LIMIT_PER_NETWORK` de 1.000 para 1.000.000 (a API aceita esse limite em `/api/scrape`).
+  `instagram_scraper.py`: perfil com data de início sem teto de rolagens e sem tempo máximo (para ao passar do início
+  do período ou quando o perfil acaba); visualizações buscadas para todos os reels coletados, não só os 400 primeiros
+  (vale também para a busca por palavra). Busca por palavra e as outras redes seguem com o tempo máximo de 900 s de
+  `common.py`. A interface continua com o controle até 1.000 ("1.000+ (Sem Limite)"), que agora é de fato 1.000:
+  para pedir mais, só pela API. 76 testes e `test_integrity.py` passando; API religada e conferida (limite máximo
+  1.000.000 no `openapi.json`, Instagram logado).
+
+- 27/10/2026, fim da tarde: **seguidores no perfil do Instagram** (pedido do Lukyam: "ajusta o RASP para ler os
+  seguidores quando abre o perfil logado"). `instagram_scraper.py`: ao abrir um perfil, procura seguidores, seguindo e
+  posts nas respostas que a página já recebe (número exato) e, se não achar, no link "seguidores" do cabeçalho (title
+  exato ou texto arredondado). Escreve no log do job "Instagram: seguidores de @x: N (fonte: ...)" e guarda em
+  `ctx.profile_stats`. A API e as colunas do Excel não mudaram. Conferido: 76 testes e `test_integrity.py` passando;
+  54 perfis lidos, todos pela resposta da página; num perfil com série externa, o número bateu com a tendência dela.

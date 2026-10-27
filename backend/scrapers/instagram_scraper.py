@@ -35,6 +35,18 @@ ENRICH_JS = """async (ids) => {
     return out;
 }"""
 
+PROFILE_STATS_JS = """(handle) => {
+    const h = handle.toLowerCase();
+    const link = (suffix) => Array.from(document.querySelectorAll('a[href]')).find(a =>
+        (a.getAttribute('href') || '').toLowerCase().replace(/\\/+$/, '').endsWith('/' + h + '/' + suffix));
+    const read = (el) => {
+        if (!el) return null;
+        const t = el.querySelector('[title]');
+        return { title: t ? t.getAttribute('title') : null, text: el.innerText || '' };
+    };
+    return { followers: read(link('followers')), following: read(link('following')) };
+}"""
+
 SEARCH_KEYS = ("xdt_fbsearch", "fbsearch", "top_serp", "keyword_search")
 PROFILE_KEYS = ("user_timeline", "feed__user", "clips__user", "profile")
 
@@ -106,7 +118,7 @@ def _enrich_reel_views(ctx: ScrapeContext, page, reels: dict) -> None:
         m = re.search(r"/(?:p|reel)/([\w-]+)", post.get("Link", ""))
         if m:
             posts_by_code[m.group(1)] = post
-    codes = list(pending)[:400]
+    codes = list(pending)
     updated = 0
     for start in range(0, len(codes), 30):
         if ctx.cancelled():
@@ -142,6 +154,40 @@ def _iter_medias(body: str, search_type: str):
                 if isinstance(d.get("code"), str) and ("taken_at" in d or "taken_at_timestamp" in d) \
                         and isinstance(d.get("user") or d.get("owner"), dict):
                     yield d
+
+
+def _stats_from_body(body: str, handle: str):
+    """Seguidores, seguindo e posts do perfil nas respostas que a própria página carrega (número exato)."""
+    for doc in loads_lenient(body):
+        for d in iter_dicts(doc):
+            if str(d.get("username") or "").lower() != handle.lower():
+                continue
+            followers = d.get("follower_count")
+            if followers is None:
+                followers = (d.get("edge_followed_by") or {}).get("count")
+            if isinstance(followers, int):
+                following = d.get("following_count")
+                if following is None:
+                    following = (d.get("edge_follow") or {}).get("count")
+                posts = d.get("media_count")
+                if posts is None:
+                    posts = (d.get("edge_owner_to_timeline_media") or {}).get("count")
+                return {"followers": followers, "following": following, "posts": posts, "source": "resposta da página"}
+    return None
+
+
+def _stats_from_header(page, handle: str):
+    """Seguidores pelo cabeçalho do perfil: o title do número é exato; o texto pode vir arredondado ("12,3 mil")."""
+    try:
+        found = page.evaluate(PROFILE_STATS_JS, handle) or {}
+    except Exception:
+        return None
+    fol = found.get("followers") or {}
+    if fol.get("title"):
+        return {"followers": parse_numeric_metric(fol["title"]), "source": "cabeçalho do perfil, exato"}
+    if fol.get("text"):
+        return {"followers": parse_numeric_metric(fol["text"]), "source": "cabeçalho do perfil, arredondado"}
+    return None
 
 
 def _dom_fallback(ctx: ScrapeContext, page, term: str) -> None:
@@ -209,6 +255,11 @@ def scrape_instagram(page, ctx: ScrapeContext):
         sub_queries = [ctx.render_variant(v, quote_phrases=False) for v in ctx.search_variants()]
 
     target_per_term = max((ctx.limit // len(sub_queries)) + 2, 8)
+    # Perfil com data de início: rola até passar do início do período, sem teto de rolagens nem de tempo.
+    # Posts mais novos que o fim do período não contam como rolagem parada.
+    period_profile = bool(profile_handle and ctx.start_dt)
+    if period_profile:
+        ctx.time_budget = float("inf")
     collector = ResponseCollector(page, API_MARKERS)
     reels = {}
     try:
@@ -238,21 +289,42 @@ def scrape_instagram(page, ctx: ScrapeContext):
                 ctx.login_required = True
                 ctx.log("Instagram: sessão expirada ou verificação de segurança. Reconecte a conta em 'Contas'.", "WARN")
                 break
+            stats = None
+            if profile_handle:
+                # Seguidores do perfil: primeiro nas respostas já recebidas (sem tirá-las da fila), depois no cabeçalho
+                for _, body in list(collector.queue):
+                    stats = stats or _stats_from_body(body, term)
+                stats = stats or _stats_from_header(page, term)
 
-            max_scrolls = min((target_per_term // 12) + 4, 25)
+            max_scrolls = float("inf") if period_profile else min((target_per_term // 12) + 4, 25)
             scrolls = stagnant = 0
             api_hits = 0
+            older = 0  # posts anteriores ao início; até 3 podem ser fixados no topo
             while not ctx.should_stop() and (len(ctx.results) - start_count) < target_per_term and scrolls <= max_scrolls:
                 before = len(ctx.results)
+                newer = False
                 for _, body in collector.drain():
+                    if profile_handle and (stats is None or stats["source"] != "resposta da página"):
+                        stats = _stats_from_body(body, term) or stats
                     for media in _iter_medias(body, ctx.search_type):
                         api_hits += 1
                         _media_to_post(ctx, media, term, profile_handle, reels)
+                        if period_profile:
+                            when = epoch_to_local(media.get("taken_at") or media.get("taken_at_timestamp"))
+                            if when is None or media.get("timeline_pinned_user_ids"):
+                                continue
+                            if ctx.end_dt and when > ctx.end_dt:
+                                newer = True
+                            elif when < ctx.start_dt:
+                                older += 1
+                if period_profile and older >= 4:
+                    ctx.log(f"Instagram: período coberto em '{term}' (chegou a posts anteriores ao início).")
+                    break
                 # Perfis podem vir renderizados no HTML (sem XHR): lê o DOM na 1ª rodada; na busca, só se a API falhar
                 if (profile_handle and scrolls == 0) or (api_hits == 0 and scrolls >= 1) or stagnant >= 2:
                     _dom_fallback(ctx, page, term)
 
-                if len(ctx.results) > before:
+                if len(ctx.results) > before or newer:
                     stagnant = 0
                     ctx.report()
                 else:
@@ -263,6 +335,13 @@ def scrape_instagram(page, ctx: ScrapeContext):
                     break
                 collector.wait(timeout_ms=3000)
                 scrolls += 1
+            if profile_handle:
+                # Vai no log do job: a API não muda e quem precisa lê a linha "seguidores de @..."
+                ctx.profile_stats = stats
+                if stats:
+                    ctx.log(f"Instagram: seguidores de @{term}: {stats['followers']} (fonte: {stats['source']}).")
+                else:
+                    ctx.log(f"Instagram: seguidores de @{term} não encontrados na página.", "WARN")
     finally:
         collector.detach()
     try:
