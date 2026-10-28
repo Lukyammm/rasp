@@ -361,3 +361,24 @@ Este documento registra em detalhes as implementações, decisões de arquitetur
   exato ou texto arredondado). Escreve no log do job "Instagram: seguidores de @x: N (fonte: ...)" e guarda em
   `ctx.profile_stats`. A API e as colunas do Excel não mudaram. Conferido: 76 testes e `test_integrity.py` passando;
   54 perfis lidos, todos pela resposta da página; num perfil com série externa, o número bateu com a tendência dela.
+
+- 27/10/2026, noite: **formato, curtida oculta, parcerias e visualizações pela aba Reels** (pedido do Lukyam: "não
+  deixe nada de fora"). Medido antes: o formato não era guardado; a curtida oculta virava 0 sem marca; parceria em que
+  o perfil é coautor era descartada; e as visualizações vinham de `/media/{id}/info/` reel por reel, que o Instagram
+  limitou depois de cerca de 1.250 a 1.600 consultas seguidas, por mais de uma hora; o RASP desistia calado (num lote
+  de 54 perfis, 2.838 de 11.616 reels com visualização).
+  - `instagram_scraper.py`: `post_format` (imagem, carrossel, reel, video) pelo `media_type`/`product_type` que a
+    própria resposta traz; `metrics_status = "oculto"` quando vem `like_and_view_counts_disabled`; no perfil, entra o
+    post de outra conta em que ele é coautor (`coauthor_producers`), com Autor = dono; aba Reels do perfil
+    (`/{perfil}/reels/`) lida depois da grade, com as reproduções de cada reel (os reels vêm num bloco
+    `fetch__XDTUserDict`, sem `taken_at`; a data sai do id do post), e, no perfil com período, os reels que estão só
+    na aba entram também (log "reels do período só na aba Reels: códigos"); `/info/` fica só para o que faltar e para
+    com aviso de "limite de uso" depois de 2 lotes vazios. Ao abrir o perfil, log "perfil @x: nome, verificado,
+    posts, links da bio".
+  - `common.py` (`EXTRA_COLUMNS`, parâmetros `post_format` e `metrics_status` em `add_post`), `base_scraper.py`,
+    `jobs.py`, `database.py` (coluna `post_format`, migração aditiva), `analytics.py` (campo `post_format` no feed),
+    `utils.py` ("oculto" aceito na taxonomia).
+  - Conferido: 76 testes; no mesmo lote de 54 perfis, 19.545 de 19.547 reels com visualização, 10 posts sem formato,
+    0 aviso de limite, 150 min; reprodução pela aba igual à do `/info/` no mesmo reel (diferença só do tempo entre as
+    leituras). O campo `is_in_profile_grid` da aba Reels não serve para saber se o post está na grade (veio falso em
+    reels que estão nela).

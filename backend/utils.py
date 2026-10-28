@@ -414,7 +414,7 @@ def sanitizar_metricas_ebm(
 ) -> dict:
     """
     Higienização e taxonomia estrita de métricas EBM Quintto (normas Dominação IA).
-    - Status: 'exato', 'coletado', 'truncado', 'ambiguo', 'ausente'.
+    - Status: 'exato', 'coletado', 'truncado', 'ambiguo', 'ausente', 'oculto' (o autor escondeu as curtidas).
     - Rejeita preenchimentos fixos/corrompidos legados.
     - Rejeita estimativas sintéticas (ex: views = likes * 15).
     """
@@ -440,7 +440,7 @@ def sanitizar_metricas_ebm(
     status = status_base
     if v is None and l is None and c is None:
         status = "ausente"
-    elif status_base not in ("exato", "coletado", "truncado", "ambiguo", "ausente"):
+    elif status_base not in ("exato", "coletado", "truncado", "ambiguo", "ausente", "oculto"):
         status = "coletado"
 
     return {

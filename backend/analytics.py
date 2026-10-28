@@ -148,6 +148,7 @@ def normalize_post(p: ScrapedPost) -> dict:
         "comments_error": getattr(p, "comments_error", "") or "",
         "metrics_status": metrics_status,
         "media_type": getattr(p, "media_type", "") or "",
+        "post_format": getattr(p, "post_format", "") or "",
         "media_paths": media_paths_val,
         "media_urls": safe_load_media_urls(media_paths_val),
         "contact_sheet_path": cs_path,

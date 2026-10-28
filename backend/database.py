@@ -114,8 +114,9 @@ class ScrapedPost(Base):
     comments_collected = Column(Integer, default=0)
     comments_error = Column(String, default="")
     comments_updated_at = Column(DateTime, nullable=True)
-    # Taxonomia e métricas EBM Quintto: exato | coletado | truncado | ambiguo | ausente
+    # Taxonomia e métricas EBM Quintto: exato | coletado | truncado | ambiguo | ausente | oculto (autor escondeu)
     metrics_status = Column(String, default="coletado")
+    post_format = Column(String, default="")  # formato informado pela rede na coleta: imagem | carrossel | reel | video
     # Multimídia (Zero Token):
     media_type = Column(String, default="")  # video | image | carousel | text
     media_paths = Column(Text, default="")  # JSON list de caminhos de arquivo locais
@@ -183,6 +184,7 @@ def _add_missing_columns():
             "comments_updated_at": "DATETIME",
             "metrics_status": "VARCHAR DEFAULT 'coletado'",
             "media_type": "VARCHAR DEFAULT ''",
+            "post_format": "VARCHAR DEFAULT ''",
             "media_paths": "TEXT DEFAULT ''",
             "contact_sheet_path": "VARCHAR DEFAULT ''",
             "scenes_detected": "INTEGER DEFAULT 0",

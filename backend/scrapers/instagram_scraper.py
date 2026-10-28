@@ -35,6 +35,9 @@ ENRICH_JS = """async (ids) => {
     return out;
 }"""
 
+EMBEDDED_JSON_JS = """() => Array.from(document.querySelectorAll('script[type="application/json"]'))
+    .map(s => s.textContent || '').filter(t => t.includes('play_count'))"""
+
 PROFILE_STATS_JS = """(handle) => {
     const h = handle.toLowerCase();
     const link = (suffix) => Array.from(document.querySelectorAll('a[href]')).find(a =>
@@ -62,11 +65,34 @@ def _relevant_roots(doc, search_type: str):
     return []
 
 
+def _post_format(media: dict) -> str:
+    """Formato que o próprio Instagram informa: imagem | carrossel | reel | video ("" se não veio)."""
+    if media.get("product_type") == "clips":
+        return "reel"
+    kind = media.get("media_type")
+    typename = str(media.get("__typename") or "")
+    if kind == 8 or media.get("product_type") == "carousel_container" or "Sidecar" in typename:
+        return "carrossel"
+    if kind == 2 or "Video" in typename:
+        return "video"
+    if kind == 1 or "Image" in typename:
+        return "imagem"
+    return ""
+
+
+def _coauthors(media: dict) -> set:
+    """Contas convidadas como coautoras (post em parceria): o post aparece na grade de todas elas."""
+    return {str(u.get("username") or "").lower() for key in ("coauthor_producers", "invited_coauthor_producers")
+            for u in (media.get(key) or []) if isinstance(u, dict)}
+
+
 def _media_to_post(ctx: ScrapeContext, media: dict, term: str, profile_handle: str = "", reels: dict = None) -> bool:
     code = media.get("code")
     user = media.get("user") or media.get("owner") or {}
     username = user.get("username") or ""
-    if profile_handle and username and username.lower() != profile_handle.lower():
+    # No perfil entram os posts dele e as parcerias em que ele é coautor (o Autor continua sendo o dono)
+    if profile_handle and username and username.lower() != profile_handle.lower() \
+            and profile_handle.lower() not in _coauthors(media):
         return False
     caption = media.get("caption")
     text = caption.get("text", "") if isinstance(caption, dict) else ""
@@ -78,7 +104,8 @@ def _media_to_post(ctx: ScrapeContext, media: dict, term: str, profile_handle: s
     likes = media.get("like_count")
     if likes is None:
         likes = ((media.get("edge_liked_by") or media.get("edge_media_preview_like") or {}).get("count", 0))
-    if media.get("like_and_view_counts_disabled"):
+    hidden = bool(media.get("like_and_view_counts_disabled"))
+    if hidden:
         likes = 0  # autor ocultou as curtidas: a API devolve um valor fictício (ex.: 3)
     comments = media.get("comment_count")
     if comments is None:
@@ -98,6 +125,8 @@ def _media_to_post(ctx: ScrapeContext, media: dict, term: str, profile_handle: s
         term_fallback=term,
         match_text=f"{text or ''} {username or ''} {author}",
         require_match=True,
+        post_format=_post_format(media),
+        metrics_status="oculto" if hidden else "",
     )
     # A busca do Instagram não informa visualizações; os reels são enriquecidos depois via /media/{id}/info/
     if added and reels is not None and is_reel and not views:
@@ -119,7 +148,7 @@ def _enrich_reel_views(ctx: ScrapeContext, page, reels: dict) -> None:
         if m:
             posts_by_code[m.group(1)] = post
     codes = list(pending)
-    updated = 0
+    updated = empty = 0
     for start in range(0, len(codes), 30):
         if ctx.cancelled():
             break
@@ -127,6 +156,12 @@ def _enrich_reel_views(ctx: ScrapeContext, page, reels: dict) -> None:
         try:
             responses = page.evaluate(ENRICH_JS, [pending[c] for c in batch]) or {}
         except Exception:
+            break
+        # Lote inteiro sem resposta é o Instagram limitando a consulta: parar e avisar, sem insistir
+        empty = 0 if responses else empty + 1
+        if empty >= 2:
+            ctx.log(f"Instagram: o Instagram parou de responder à consulta de visualizações (limite de uso); "
+                    f"{len(codes) - start - len(batch)} reels não foram consultados.", "WARN")
             break
         for code in batch:
             body, post = responses.get(pending[code]), posts_by_code.get(code)
@@ -145,6 +180,94 @@ def _enrich_reel_views(ctx: ScrapeContext, page, reels: dict) -> None:
                     post["Comentarios"] = str(item["comment_count"])
         page.wait_for_timeout(400)
     ctx.log(f"Instagram: visualizações obtidas para {updated} de {len(pending)} reels.")
+
+
+def _reels_tab(ctx: ScrapeContext, page, collector, handle: str, reels: dict, period_profile: bool) -> None:
+    """Aba Reels do perfil: cada reel já vem com as reproduções, então as visualizações saem daqui sem consultar
+    reel por reel. No perfil com período também entram os reels que não foram para a grade."""
+    if ctx.cancelled():
+        return
+    posts_by_code = {}
+    for post in ctx.results:
+        m = re.search(r"/(?:p|reel)/([\w-]+)", post.get("Link", ""))
+        if m:
+            posts_by_code[m.group(1)] = post
+    before_total = len(ctx.results)
+    try:
+        page.goto(f"https://www.instagram.com/{urllib.parse.quote(handle)}/reels/", wait_until="domcontentloaded",
+                  timeout=30000)
+    except Exception as exc:
+        ctx.log(f"Instagram: falha ao abrir a aba Reels de @{handle}: {str(exc).splitlines()[0]}", "WARN")
+        return
+    collector.wait(timeout_ms=7000)
+    seen, only_tab = set(), []
+    filled = older = stagnant = scrolls = 0
+    # Os primeiros reels vêm escritos na própria página (sem XHR); os seguintes chegam ao rolar
+    try:
+        bodies = [("pagina", b) for b in (page.evaluate(EMBEDDED_JSON_JS) or [])]
+    except Exception:
+        bodies = []
+    while not ctx.cancelled() and (period_profile or scrolls <= 25):
+        new_codes = 0
+        for _, body in bodies + list(collector.drain()):
+            for doc in loads_lenient(body):
+                for d in _reels_tab_items(doc, handle):
+                    code = d["code"]
+                    if code in seen:
+                        continue
+                    seen.add(code)
+                    new_codes += 1
+                    plays = d.get("play_count") or d.get("ig_play_count") or d.get("view_count")
+                    when = _media_when(d)
+                    post = posts_by_code.get(code)
+                    if post is not None:
+                        if plays and not parse_numeric_metric(post.get("Views")):
+                            post["Views"] = str(plays)
+                            filled += 1
+                        if plays:
+                            reels.pop(code, None)
+                    elif period_profile and when is not None:
+                        # A aba Reels não traz taken_at: a data sai do id do post (momento em que foi criado)
+                        if _media_to_post(ctx, {**d, "taken_at": d.get("taken_at") or when.timestamp()},
+                                          handle, handle, reels):
+                            only_tab.append(code)
+                    if period_profile and when is not None and when < ctx.start_dt \
+                            and not (d.get("clips_tab_pinned_user_ids") or d.get("timeline_pinned_user_ids")):
+                        older += 1
+        bodies = []
+        if period_profile and older >= 4:
+            break
+        if not period_profile and not reels:
+            break  # todos os reels coletados já têm visualização
+        stagnant = 0 if new_codes else stagnant + 1
+        if stagnant >= 3 or not scroll(page, 3000, 900):
+            break
+        collector.wait(timeout_ms=3000)
+        scrolls += 1
+    ctx.log(f"Instagram: aba Reels de @{handle}: {len(seen)} reels lidos, visualizações preenchidas em {filled}"
+            + (f"; {len(ctx.results) - before_total} reels do período só na aba Reels: {', '.join(only_tab)}"
+               if only_tab else "") + ".")
+
+
+def _media_when(media: dict):
+    """Data do post: taken_at quando vem; senão, o momento gravado no próprio id do post."""
+    if media.get("taken_at") or media.get("taken_at_timestamp"):
+        return epoch_to_local(media.get("taken_at") or media.get("taken_at_timestamp"))
+    media_id = str(media.get("pk") or media.get("id") or "").split("_")[0]
+    if not media_id.isdigit():
+        media_id = str(decode_instagram_shortcode(str(media.get("code") or "")[:11]) or "")
+    return epoch_to_local(((int(media_id) >> 23) + 1314220800000) / 1000.0) if media_id.isdigit() else None
+
+
+def _reels_tab_items(doc, handle: str):
+    """Reels do perfil numa resposta da aba Reels (o nome do bloco muda; vale o dono ou a coautoria)."""
+    h = handle.lower()
+    for d in iter_dicts(doc):
+        if not isinstance(d.get("code"), str) or d.get("product_type") != "clips":
+            continue
+        user = d.get("user") or d.get("owner") or {}
+        if str(user.get("username") or "").lower() == h or h in _coauthors(d):
+            yield d
 
 
 def _iter_medias(body: str, search_type: str):
@@ -172,7 +295,13 @@ def _stats_from_body(body: str, handle: str):
                 posts = d.get("media_count")
                 if posts is None:
                     posts = (d.get("edge_owner_to_timeline_media") or {}).get("count")
-                return {"followers": followers, "following": following, "posts": posts, "source": "resposta da página"}
+                # identidade do perfil: nome, selo e links da bio (servem para conferir se o @ é o oficial)
+                links = [str(b.get("url") or "") for b in (d.get("bio_links") or []) if isinstance(b, dict)]
+                if d.get("external_url") and d["external_url"] not in links:
+                    links.insert(0, str(d["external_url"]))
+                return {"followers": followers, "following": following, "posts": posts, "source": "resposta da página",
+                        "full_name": d.get("full_name") or "", "verified": d.get("is_verified"),
+                        "links": [l for l in links if l]}
     return None
 
 
@@ -340,8 +469,18 @@ def scrape_instagram(page, ctx: ScrapeContext):
                 ctx.profile_stats = stats
                 if stats:
                     ctx.log(f"Instagram: seguidores de @{term}: {stats['followers']} (fonte: {stats['source']}).")
+                    if stats.get("full_name") or stats.get("links") or stats.get("verified") is not None:
+                        ctx.log(f"Instagram: perfil @{term}: nome '{stats.get('full_name', '')}', "
+                                f"verificado {'sim' if stats.get('verified') else 'não'}, "
+                                f"posts {stats.get('posts')}, links da bio: {' | '.join(stats.get('links') or []) or '-'}.")
                 else:
                     ctx.log(f"Instagram: seguidores de @{term} não encontrados na página.", "WARN")
+                # Respostas da grade que chegaram depois da última rodada, antes de trocar de aba
+                for _, body in collector.drain():
+                    for media in _iter_medias(body, ctx.search_type):
+                        _media_to_post(ctx, media, term, profile_handle, reels)
+                if reels or period_profile:
+                    _reels_tab(ctx, page, collector, term, reels, period_profile)
     finally:
         collector.detach()
     try:

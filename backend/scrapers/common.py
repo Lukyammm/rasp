@@ -21,6 +21,8 @@ logger = logging.getLogger("rasp.scraper")
 DISPLAY_NAMES = {"x": "X", "tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube", "facebook": "Facebook"}
 POST_COLUMNS = ["Rede", "Palavra-Chave", "Termo Específico", "Autor", "Texto", "Curtidas", "Comentarios",
                 "Views", "Compartilhamentos", "Link", "Data"]
+# Opcionais por rede: formato (imagem | carrossel | reel | video) e status das métricas (ex.: "oculto")
+EXTRA_COLUMNS = ["post_format", "metrics_status"]
 
 
 def _parse_day(value: Optional[str], end: bool = False) -> Optional[datetime]:
@@ -170,7 +172,8 @@ class ScrapeContext:
 
     def add_post(self, *, key: str, author: str, text: str, link: str, date: Optional[datetime],
                  likes=0, comments=0, views=0, shares=0, term_fallback: str = "",
-                 match_text: Optional[str] = None, require_match: bool = True) -> bool:
+                 match_text: Optional[str] = None, require_match: bool = True,
+                 post_format: str = "", metrics_status: str = "") -> bool:
         """Adiciona um post aplicando deduplicação, limite, período e exclusões. Retorna True se entrou."""
         if self.full or not key or key in self._seen:
             return False
@@ -199,6 +202,8 @@ class ScrapeContext:
             "Compartilhamentos": str(shares if shares not in (None, "") else 0),
             "Link": link,
             "Data": format_date(date),
+            "post_format": post_format,
+            "metrics_status": metrics_status,
         })
         return True
 

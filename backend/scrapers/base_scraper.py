@@ -16,7 +16,7 @@ except ImportError:  # pragma: no cover
 
 from database import load_brand_handles
 from scrapers.browser import network_lock, open_page
-from scrapers.common import POST_COLUMNS, ScrapeContext
+from scrapers.common import EXTRA_COLUMNS, POST_COLUMNS, ScrapeContext
 from scrapers.facebook_scraper import scrape_facebook
 from scrapers.instagram_scraper import scrape_instagram
 from scrapers.tiktok_scraper import scrape_tiktok
@@ -81,6 +81,6 @@ def scrape_network(network: str, keyword: str, limit: int = 20, scrape_comments:
     if ctx.skipped_by_date:
         ctx.log(f"{ctx.name}: {ctx.skipped_by_date} posts ignorados por estarem fora do período selecionado.")
 
-    df = pd.DataFrame(ctx.results[:limit], columns=POST_COLUMNS)
+    df = pd.DataFrame(ctx.results[:limit], columns=POST_COLUMNS + EXTRA_COLUMNS)
     comments_total = int(df["Comentarios"].map(parse_numeric_metric).sum()) if not df.empty else 0
     return df, len(df), comments_total

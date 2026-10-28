@@ -270,6 +270,7 @@ def _persist_posts(run_id: str, df: pd.DataFrame, network: str, keyword: str) ->
                 post_date=str(row.get("Data") or ""),
                 metrics_status=str(row.get("metrics_status") or "coletado"),
                 accessibility_caption=str(row.get("accessibility_caption") or ""),
+                post_format=row.get("post_format") if isinstance(row.get("post_format"), str) else "",
             )
             for row in df.to_dict(orient="records")
         ])
