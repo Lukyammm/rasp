@@ -56,20 +56,28 @@ def _tokenize(query: str) -> List[Tuple[str, Optional[str]]]:
             j = i + 1
             while j < n and query[j] not in "\"“”":
                 j += 1
+            if j >= n:  # aspa sem par (esquecida, ou polegada: 5" tela): vale como se não estivesse lá
+                i += 1
+                continue
             phrase = query[i + 1:j].strip()
             if phrase:
                 tokens.append(("PHRASE", phrase))
             i = j + 1
             continue
+        if c in ",;":  # vírgula separa termos alternativos, como na tela ("ciro, elmano")
+            tokens.append(("OR", None))
+            i += 1
+            continue
         if c == "'":
-            m = re.match(r"'([^']+)'(?=[\s()]|$)", query[i:])
+            m = re.match(r"'([^']+)'(?=[\s(),;]|$)", query[i:])
             if m:
                 tokens.append(("PHRASE", m.group(1).strip()))
                 i += m.end()
                 continue
         j = i
-        while j < n and not query[j].isspace() and query[j] not in "()\"“”":
-            j += 1
+        while j < n and not query[j].isspace() and query[j] not in "()\"“”;" and not (
+                query[j] == "," and not (j > i and query[j - 1].isdigit() and j + 1 < n and query[j + 1].isdigit())):
+            j += 1  # vírgula entre algarismos é decimal (R$ 2,50), não separa termos
         word = query[i:j]
         i = j
         upper = word.upper()
@@ -150,8 +158,9 @@ class _Parser:
             return node
         if kind in ("TERM", "PHRASE"):
             _, value = self.next()
+            prefix = value.endswith("*")  # 'bolsonar*' = qualquer palavra que comece assim
             value = value.strip("*")
-            return ("term", value, kind == "PHRASE") if value else None
+            return ("term", value, kind == "PHRASE", prefix) if value else None
         self.pos += 1
         return None
 
@@ -164,14 +173,23 @@ def _combine(kind, nodes):
     return (kind, nodes)
 
 
-def _term_regex(term: str):
+def _term_regex(term: str, phrase: bool = False, prefix: bool = False):
+    """
+    Palavra inteira: 'sol' não entra em 'solução', 'arte' não entra em 'artesanato'.
+    Aceita plural (debate -> debates) e número, '_' ou '.' colados (lukyam72, lukyam_oficial, lukyam.madeira).
+    'termo*' aceita qualquer continuação (bolsonar* -> bolsonarista).
+    Sem aspas, em @perfil e #hashtag o termo pode vir colado a outras palavras (#cirogomes, @riomarfortaleza);
+    entre aspas, só a palavra ou a frase exata.
+    """
     norm = normalize_text(term)
     if not norm:
         return None
     pattern = r"\s+".join(re.escape(part) for part in norm.split(" "))
-    # Fronteira à esquerda: impede prefixos indevidos (ex: "embate" para "debate"),
-    # mas aceita sufixos de rede social como números e arrobas (ex: "lukyam72", "lukyam_oficial", "debates").
-    return re.compile(r"(?<![0-9a-z_])" + pattern)
+    tail = "" if prefix else r"(?:e?s)?(?![^\W\d_])"
+    rx = r"(?<!\w)" + pattern + tail
+    if not phrase and " " not in norm:
+        rx += r"|(?<=[@#])" + pattern
+    return re.compile(rx)
 
 
 class BooleanQuery:
@@ -186,15 +204,16 @@ class BooleanQuery:
     def is_empty(self) -> bool:
         return self.ast is None
 
-    def _regex(self, term):
-        if term not in self._regex_cache:
-            self._regex_cache[term] = _term_regex(term)
-        return self._regex_cache[term]
+    def _regex(self, node):
+        key = node[1:]
+        if key not in self._regex_cache:
+            self._regex_cache[key] = _term_regex(*key)
+        return self._regex_cache[key]
 
     def _eval(self, node, text) -> bool:
         kind = node[0]
         if kind == "term":
-            rx = self._regex(node[1])
+            rx = self._regex(node)
             return True if rx is None else bool(rx.search(text))
         if kind == "not":
             return not self._eval(node[1], text)
@@ -213,28 +232,35 @@ class BooleanQuery:
         kind = node[0]
         if kind == "term":
             target = out_neg if negated else out_pos
-            if node[1].lower() not in (t.lower() for t in target):
-                target.append(node[1])
+            if node[1].lower() not in (t[1].lower() for t in target):
+                target.append(node)
         elif kind == "not":
             self._collect(node[1], not negated, out_pos, out_neg)
         else:
             for child in node[1]:
                 self._collect(child, negated, out_pos, out_neg)
 
-    def positive_terms(self) -> List[str]:
+    def _term_nodes(self):
         pos, neg = [], []
         self._collect(self.ast, False, pos, neg)
-        return pos
+        return pos, neg
+
+    def positive_terms(self) -> List[str]:
+        return [n[1] for n in self._term_nodes()[0]]
 
     def negative_terms(self) -> List[str]:
-        pos, neg = [], []
-        self._collect(self.ast, False, pos, neg)
-        return neg
+        return [n[1] for n in self._term_nodes()[1]]
+
+    def matched_terms(self, text: str) -> List[str]:
+        """Termos positivos que aparecem no texto, pela mesma regra do filtro (inclui 'termo*')."""
+        norm = normalize_text(text)
+        return [n[1] + ("*" if n[3] else "") for n in self._term_nodes()[0]
+                if self._regex(n) and self._regex(n).search(norm)]
 
     def has_excluded_term(self, text: str) -> bool:
         """True se o texto contém algum termo marcado com NOT (útil em redes cuja busca não suporta exclusão)."""
         norm = normalize_text(text)
-        return any(self._regex(t) and self._regex(t).search(norm) for t in self.negative_terms())
+        return any(self._regex(n) and self._regex(n).search(norm) for n in self._term_nodes()[1])
 
     def to_x_query(self) -> str:
         """Converte para a sintaxe de busca do X: AND implícito, OR, "frases" e -exclusão."""
@@ -276,7 +302,7 @@ def extract_atomic_terms(query: str) -> List[str]:
     if not query or not str(query).strip():
         return []
     terms: List[str] = []
-    for part in re.split(r"[,;\n]", str(query)):
+    for part in str(query).splitlines():  # vírgula e ponto e vírgula a própria consulta já trata como OR
         for t in BooleanQuery(part).positive_terms():
             if t.lower() not in (x.lower() for x in terms):
                 terms.append(t)

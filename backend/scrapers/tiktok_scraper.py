@@ -28,7 +28,8 @@ def _item_to_post(ctx: ScrapeContext, item: dict, term: str) -> bool:
     if not item_id:
         return False
     author_obj = item.get("author") or {}
-    author_name = author_obj.get("uniqueId") or author_obj.get("nickname") or term
+    # Sem autor na resposta, não usar o termo no lugar: o post passaria no filtro só por isso
+    author_name = author_obj.get("uniqueId") or author_obj.get("nickname") or "tiktok_user"
     nickname = str(author_obj.get("nickname") or "")
     author = f"@{str(author_name).lstrip('@')}"
     stats = item.get("statsV2") or item.get("stats") or {}
@@ -119,7 +120,7 @@ def scrape_tiktok(page, ctx: ScrapeContext):
                                 _item_to_post(ctx, api_items[item_id], term)
                                 continue
                             m_author = re.search(r"(@[\w\.\-]+)/", d.get("href", ""))
-                            author = m_author.group(1) if m_author else f"@{term.replace(' ', '')}"
+                            author = m_author.group(1) if m_author else "@tiktok_user"
                             m_likes = re.search(r"([\d\.,]+[KMBkmb]?)\s*$", d.get("text", ""))
                             ts = int(item_id) >> 32
                             raw_alt = d.get("alt", "").strip()

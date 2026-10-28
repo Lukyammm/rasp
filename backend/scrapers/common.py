@@ -163,6 +163,8 @@ class ScrapeContext:
     # ---------------- posts ----------------
     def matched_term(self, text: str, author: str, fallback: str = "") -> str:
         term = identify_matched_terms(self.atomic_terms, text, author)
+        if len(self.atomic_terms) > 1:  # pela regra do filtro, que também reconhece 'termo*'
+            term = ", ".join(self.query.matched_terms(f"{text} {author}")) or term
         if term == "Geral" and fallback:
             return fallback
         return term

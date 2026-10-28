@@ -11,14 +11,35 @@ from utils import parse_numeric_metric
 DOM_JS = """() => {
     const out = [];
     const selector = 'a[href*="/posts/"], a[href*="/permalink.php"], a[href*="story_fbid"], a[href*="/videos/"], a[href*="/reel/"], a[href*="/photo"], a[href*="/watch/?v="]';
+    // Comentário: article dentro de outro article, ou marcado como comentário/resposta
+    const isComment = (el) => /coment|comment|respos|repl/i.test(el.getAttribute('aria-label') || '')
+        || !!(el.parentElement && el.parentElement.closest('[role="article"]'));
+    const inComment = (node, root) => {
+        for (let el = node.parentElement; el && el !== root; el = el.parentElement) {
+            if (el.getAttribute('role') === 'article' && isComment(el)) return true;
+        }
+        return false;
+    };
     for (const art of document.querySelectorAll('div[role="feed"] > div, div[role="article"]')) {
-        const a = art.querySelector(selector);
+        // Comentário não vira post: o link dele leva ao post comentado, e o termo pode estar só no comentário
+        if (art.matches('[role="article"]') && isComment(art)) continue;
+        // Link do post: o primeiro fora dos comentários (um comentário pode trazer foto ou outro post)
+        const links = Array.from(art.querySelectorAll(selector));
+        const a = links.find(x => !inComment(x, art)) || links[0];
         if (!a) continue;
         const authorEl = art.querySelector('h2 a, h3 a, h4 a, strong a, a[role="link"] strong');
         const texts = [];
         for (const t of art.querySelectorAll('div[dir="auto"], span[dir="auto"]')) {
+            if (inComment(t, art)) continue;
             const s = (t.innerText || '').trim();
             if (s.length > 10 && !texts.some(x => x.includes(s))) texts.push(s);
+        }
+        // Todo o texto do post, sem os comentários abertos embaixo dele: é o que confere o termo
+        const own = [];
+        const walker = document.createTreeWalker(art, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n && own.length < 2000; n = walker.nextNode()) {
+            const v = (n.nodeValue || '').trim();
+            if (v && !inComment(n, art)) own.push(v);
         }
         const arias = Array.from(art.querySelectorAll('[aria-label]'))
             .map(e => e.getAttribute('aria-label') || '').filter(x => /\\d/.test(x)).slice(0, 40);
@@ -26,6 +47,7 @@ DOM_JS = """() => {
             href: a.href || '',
             author: authorEl ? (authorEl.innerText || '').trim() : '',
             text: texts.join(' '),
+            own: own.join(' ').slice(0, 5000),
             raw: (art.innerText || '').slice(0, 5000),
             arias: arias
         });
@@ -118,7 +140,8 @@ def scrape_facebook(page, ctx: ScrapeContext):
                     views=_find_metric([NUM + r"\s*(?:visualizaç(?:ão|ões)|views?|reproduç(?:ão|ões))"], raw, arias),
                     shares=_find_metric([NUM + r"\s*compartilhamentos?", NUM + r"\s*shares?"], raw, arias),
                     term_fallback=term,
-                    match_text=f"{it.get('text', '')} {raw} {author}",
+                    # Só o post e o autor: o innerText do bloco traz os comentários abertos embaixo dele
+                    match_text=f"{it.get('text', '')} {it.get('own', '')} {author}",
                     require_match=True,
                 )
             if len(ctx.results) > before:

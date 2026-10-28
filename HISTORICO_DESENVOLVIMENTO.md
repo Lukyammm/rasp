@@ -382,3 +382,22 @@ Este documento registra em detalhes as implementações, decisões de arquitetur
     0 aviso de limite, 150 min; reprodução pela aba igual à do `/info/` no mesmo reel (diferença só do tempo entre as
     leituras). O campo `is_in_profile_grid` da aba Reels não serve para saber se o post está na grade (veio falso em
     reels que estão nela).
+
+- 28/10/2026: **busca por termos trazendo post sem relação** (relato de quem usa o RASP pelo EBM Hub; o mesmo conserto
+  foi feito no RASP do Hub, repositório `ebm-hub`). Feito numa sessão na nuvem, sem as sessões das redes: nenhuma
+  coleta real; achados pela leitura do código e por testes com textos de exemplo.
+  - `utils.py`: o filtro conferia só o começo da palavra ("sol" entrava em "solução", "arte" em "artesanato", "PMF" em
+    "pmfortaleza"). Agora vale a palavra inteira, com plural e número, "_" ou "." colados (@lukyam72); sem aspas, o
+    termo pode vir colado logo depois de @ ou # (#cirogomes); `termo*` pede qualquer continuação; o NOT segue a mesma
+    regra. Vírgula e ponto e vírgula valem OR dentro da consulta (antes "ciro, fulano" exigia "ciro," com a vírgula),
+    menos entre algarismos (R$ 2,50); aspa sem par não conta.
+  - `facebook_scraper.py`: comentário não vira post, o termo é conferido no texto do post sem os comentários e o link
+    é o primeiro fora dos comentários. Antes, post sem o termo entrava porque alguém comentou o termo.
+  - `tiktok_scraper.py`: sem autor na resposta, o autor era o próprio termo e o post passava no filtro só por isso.
+  - `frontend/app.js` (`?v=26`): `splitKeywords` separa as buscas só pelas vírgulas fora de parênteses e aspas
+    ("(ciro, elmano) AND debate" virava "(ciro" sozinho); aviso ao extrair quando a busca mistura OR com AND, ou com
+    espaço, sem parênteses.
+  - Revisão independente antes de subir (4 revisores, 2 céticos por achado): 12 achados, 4 ficaram e foram corrigidos.
+  - Conferido: 81 testes, as mesmas 3 falhas de `test_multimedia` de antes; 5 testes novos; `test_integrity.py` OK.
+  - Fica como está: Facebook não lê a data do post (o período não filtra o Facebook); shorts do YouTube vêm sem data;
+    "vacina" não pega "vacinação" sem o asterisco.

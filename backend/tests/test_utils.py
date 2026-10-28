@@ -36,6 +36,50 @@ class BooleanQueryTests(unittest.TestCase):
         self.assertTrue(q.matches("#debates de ontem"))
         self.assertFalse(q.matches("o embate foi duro"))
 
+    def test_whole_word(self):
+        # O termo era aceito como começo de qualquer palavra: 'sol' trazia 'solução', 'arte' trazia 'artesanato'
+        self.assertFalse(BooleanQuery("sol").matches("Nova solução para o bairro"))
+        self.assertFalse(BooleanQuery("arte").matches("feira de artesanato"))
+        self.assertFalse(BooleanQuery("mar").matches("marketing digital"))
+        self.assertFalse(BooleanQuery("PMF").matches("pmfortaleza"))
+        self.assertTrue(BooleanQuery("sol").matches("Dia de sol na praia"))
+        self.assertTrue(BooleanQuery("mar").matches("os mares do Ceará"))
+        self.assertTrue(BooleanQuery("lukyam").matches("@lukyam72 @lukyam_oficial"))
+        self.assertTrue(BooleanQuery("lukyam").matches("@lukyam.madeira"))
+        self.assertTrue(BooleanQuery("café").matches("os cafés da cidade"))
+
+    def test_glued_in_hashtag_and_profile(self):
+        self.assertTrue(BooleanQuery("ciro").matches("#cirogomes"))
+        self.assertTrue(BooleanQuery("PMF").matches("@pmfortaleza"))
+        self.assertFalse(BooleanQuery('"ciro"').matches("#cirogomes"))
+        self.assertFalse(BooleanQuery('"Ciro Gomes"').matches("#cirogomes"))
+
+    def test_prefix_wildcard(self):
+        q = BooleanQuery("bolsonar* AND debate")
+        self.assertTrue(q.matches("bolsonaristas no debate"))
+        self.assertFalse(BooleanQuery("bolsonaro").matches("bolsonarista"))
+        self.assertEqual(q.positive_terms(), ["bolsonar", "debate"])
+        self.assertEqual(q.matched_terms("bolsonaristas no debate"), ["bolsonar*", "debate"])
+        self.assertTrue(BooleanQuery("x NOT bolso*").has_excluded_term("bolsonaro"))
+
+    def test_comma_is_or(self):
+        # Vinda de outro programa pela API, 'ciro, fulano' exigia 'ciro,' com a vírgula
+        self.assertTrue(BooleanQuery("ciro, fulano").matches("fulano falou"))
+        q = BooleanQuery("(ciro, elmano) AND debate")
+        self.assertTrue(q.matches("elmano no debate"))
+        self.assertFalse(q.matches("ciro na rua"))
+        self.assertTrue(BooleanQuery('"Silva, João"').matches("Silva, João"))
+        # Vírgula entre algarismos é decimal, não separa termos
+        self.assertFalse(BooleanQuery("R$ 2,50").matches("50 anos de festa"))
+        self.assertTrue(BooleanQuery("R$ 2,50").matches("só R$ 2,50 hoje"))
+        self.assertEqual(extract_atomic_terms("(ciro, elmano) AND debate NOT pesquisa"), ["ciro", "elmano", "debate"])
+
+    def test_unclosed_quote_is_ignored(self):
+        # Aspa esquecida juntava tudo numa frase que nunca casa
+        q = BooleanQuery('"ciro, elmano, lula')
+        self.assertTrue(q.matches("ciro falou hoje"))
+        self.assertTrue(BooleanQuery('5" tela, celular').matches("celular novo"))
+
     def test_minus_exclusion_and_leniency(self):
         self.assertFalse(BooleanQuery("ciro -elmano").matches("ciro e elmano"))
         self.assertTrue(BooleanQuery("(ciro OR elmano").matches("elmano"))

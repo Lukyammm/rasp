@@ -976,6 +976,43 @@ function connectWebSocket() {
     });
 }
 
+// Separa as buscas pelas vírgulas de fora de parênteses e aspas: "(ciro, elmano) AND debate" continua uma busca só.
+// Vírgula entre algarismos é decimal (R$ 2,50). Aspa sem par (esquecida, ou polegada: 5" tela) não conta, como no servidor.
+function splitKeywords(text, ignoreQuotes = false) {
+    const chars = Array.from(String(text || ''));
+    const parts = [];
+    let depth = 0, quoted = false, current = '';
+    chars.forEach((c, i) => {
+        if (!ignoreQuotes && (c === '"' || c === '“' || c === '”')) quoted = !quoted;
+        else if (!quoted && c === '(') depth++;
+        else if (!quoted && c === ')') depth = Math.max(0, depth - 1);
+        const decimal = /\d/.test(chars[i - 1] || '') && /\d/.test(chars[i + 1] || '');
+        if (c === ',' && !quoted && depth === 0 && !decimal) {
+            parts.push(current);
+            current = '';
+        } else {
+            current += c;
+        }
+    });
+    if (quoted) return splitKeywords(text, true);
+    parts.push(current);
+    return parts.map(k => k.trim()).filter(Boolean);
+}
+
+// AND vale antes de OR, e o espaço entre dois termos é um AND: "a OR b AND c" e "a OR b c" buscam a, ou b com c.
+// Lê os operadores como o servidor: palavras soltas, fora das frases entre aspas.
+function warnAmbiguousKeywords(keywords) {
+    const ambiguous = keywords.find(k => {
+        if (/[()]/.test(k)) return false;
+        const words = k.replace(/["“”][^"“”]*["“”]/g, ' FRASE ').split(/\s+/).filter(Boolean).map(w => w.toUpperCase());
+        if (!words.includes('OR')) return false;
+        return words.some((w, i) => w === 'AND' || (i > 0 && w !== 'OR' && !['OR', 'AND', 'NOT'].includes(words[i - 1])));
+    });
+    if (ambiguous) {
+        showToast(`"${ambiguous}" mistura OR com AND (ou com espaço) sem parênteses: o AND vale primeiro. Para (a OR b) AND c, use parênteses.`, 'info');
+    }
+}
+
 function collectScrapeKeywords() {
     const searchType = document.querySelector('input[name="search_type"]:checked')?.value || 'keyword';
     if (searchType === 'profile') {
@@ -985,7 +1022,7 @@ function collectScrapeKeywords() {
         return { searchType, keywords: brand ? [brand, ...typed] : typed };
     }
     const text = (document.getElementById('keywordEditor')?.innerText || '').replace(/ /g, ' ').trim();
-    return { searchType, keywords: text ? text.split(',').map(k => k.trim()).filter(Boolean) : [] };
+    return { searchType, keywords: splitKeywords(text) };
 }
 
 // Lê a data do campo; se o usuário digitou direto no campo visual (dd/mm/aaaa), converte para AAAA-MM-DD
@@ -1216,6 +1253,7 @@ async function handleScrapeSubmit(e) {
         showToast('Selecione pelo menos uma rede social', 'error');
         return;
     }
+    if (searchType === 'keyword') warnAmbiguousKeywords(keywords);
 
     const startVal = readDateInput('startDate', window.fpStart);
     const endVal = readDateInput('endDate', window.fpEnd);
@@ -5692,7 +5730,7 @@ async function handleScheduleSubmit(e) {
         keywords = [brand];
     } else {
         const text = (document.getElementById('schKeywordEditor')?.innerText || '').replace(/ /g, ' ').trim();
-        keywords = text.split(',').map(k => k.trim()).filter(Boolean);
+        keywords = splitKeywords(text);
         if (keywords.length === 0) {
             showToast('Adicione sua expressão de busca (Lógica Booleana)', 'error');
             return;

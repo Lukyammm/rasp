@@ -77,7 +77,11 @@ cobre:
 
 ## Onde parou
 
-Atualizado em 2026-10-15. Esta seção tem no máximo 40 linhas: o que fechou vai para `HISTORICO_DESENVOLVIMENTO.md`.
+Atualizado em 2026-10-28. Esta seção tem no máximo 40 linhas: o que fechou vai para `HISTORICO_DESENVOLVIMENTO.md`.
+
+- **Busca por termos (28/10/2026):** filtro com palavra inteira, `termo*`, Facebook sem post por causa de comentário,
+  vírgula dentro de parênteses e aspa sem par tratadas. Detalhes no `HISTORICO_DESENVOLVIMENTO.md`. **Falta:** `git
+  pull` nesta pasta e uma busca real para comparar (feito na nuvem, sem coleta).
 
 - **Calendário (14/10/2026):** o estilo do flatpickr no `frontend/index.html` foi refeito (alinhamento, tamanhos,
   cobalto, sem vidro). Vale aqui e no EBM Hub, que lê esta página. Detalhes no `HISTORICO.md`.
